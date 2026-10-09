@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D AI City Builder & Planner</title>
+  <!-- Tailwind CSS CDN for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Three.js & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; user-select: none; font-family: system-ui, sans-serif; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100">
+
+  <!-- 3D Canvas -->
+  <div id="canvas-container" class="absolute inset-0"></div>
+
+  <!-- Top Navigation & Stats Bar -->
+  <header class="absolute top-4 left-4 right-4 flex flex-wrap items-center justify-between gap-3 pointer-events-none z-10">
+    <!-- Brand / Title -->
+    <div class="glass px-4 py-2 rounded-2xl flex items-center gap-3 shadow-lg pointer-events-auto">
+      <div class="bg-indigo-600 text-white p-2 rounded-xl">
+        <i data-lucide="box" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-sm tracking-wide text-white">AI 3D UrbanBuilder</h1>
+        <p class="text-xs text-slate-400">Click ground to place • Left drag to rotate • Right drag to pan</p>
+      </div>
+    </div>
+
+    <!-- Live Counters -->
+    <div class="glass px-5 py-2.5 rounded-2xl shadow-lg flex items-center gap-6 pointer-events-auto">
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+        <div class="text-xs">
+          <p class="text-slate-400 uppercase font-semibold text-[10px]">Total</p>
+          <p id="stat-total" class="font-bold text-white text-sm">0</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+        <div class="text-xs">
+          <p class="text-slate-400 uppercase font-semibold text-[10px]">Parks</p>
+          <p id="stat-parks" class="font-bold text-emerald-400 text-sm">0</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+        <div class="text-xs">
+          <p class="text-slate-400 uppercase font-semibold text-[10px]">Shops</p>
+          <p id="stat-shops" class="font-bold text-amber-400 text-sm">0</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
+        <div class="text-xs">
+          <p class="text-slate-400 uppercase font-semibold text-[10px]">Houses/Towers</p>
+          <p id="stat-homes" class="font-bold text-indigo-400 text-sm">0</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+        <div class="text-xs">
+          <p class="text-slate-400 uppercase font-semibold text-[10px]">Factories</p>
+          <p id="stat-factories" class="font-bold text-rose-400 text-sm">0</p>
+        </div>
+      </div>
+      <!-- Day / Night Toggle -->
+      <button id="toggle-light" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 transition ml-2 pointer-events-auto border border-slate-700" title="Day / Night Toggle">
+        <i data-lucide="sun" id="sun-moon-icon" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Left Sidebar: Building Catalog / Tools -->
+  <aside class="absolute left-4 top-24 bottom-6 w-64 glass rounded-3xl p-4 flex flex-col justify-between shadow-2xl z-10 pointer-events-auto overflow-y-auto">
+    <div>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-bold text-slate-400 tracking-wider uppercase">Select Structure</h2>
+        <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-medium">Palette</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2" id="building-tools">
+        <!-- Tools will be generated or bound via JS -->
+        <button data-type="house" class="tool-btn active flex flex-col items-center p-3 rounded-2xl bg-indigo-600/30 border border-indigo-500 text-left transition hover:scale-[1.02]">
+          <i data-lucide="home" class="w-6 h-6 text-indigo-400 mb-1"></i>
+          <span class="text-xs font-semibold">House</span>
+          <span class="text-[10px] text-slate-400">Residential</span>
+        </button>
+
+        <button data-type="apartment" class="tool-btn flex flex-col items-center p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-left transition hover:scale-[1.02]">
+          <i data-lucide="building" class="w-6 h-6 text-cyan-400 mb-1"></i>
+          <span class="text-xs font-semibold">Tower</span>
+          <span class="text-[10px] text-slate-400">High-rise</span>
+        </button>
+
+        <button data-type="shop" class="tool-btn flex flex-col items-center p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-left transition hover:scale-[1.02]">
+          <i data-lucide="shopping-bag" class="w-6 h-6 text-amber-400 mb-1"></i>
+          <span class="text-xs font-semibold">Shop</span>
+          <span class="text-[10px] text-slate-400">Commercial</span>
+        </button>
+
+        <button data-type="park" class="tool-btn flex flex-col items-center p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-left transition hover:scale-[1.02]">
+          <i data-lucide="trees" class="w-6 h-6 text-emerald-400 mb-1"></i>
+          <span class="text-xs font-semibold">Park</span>
+          <span class="text-[10px] text-slate-400">Nature</span>
+        </button>
+
+        <button data-type="factory" class="tool-btn flex flex-col items-center p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-left transition hover:scale-[1.02]">
+          <i data-lucide="factory" class="w-6 h-6 text-rose-400 mb-1"></i>
+          <span class="text-xs font-semibold">Factory</span>
+          <span class="text-[10px] text-slate-400">Industrial</span>
+        </button>
+
+        <button data-type="road" class="tool-btn flex flex-col items-center p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-left transition hover:scale-[1.02]">
+          <i data-lucide="milestone" class="w-6 h-6 text-gray-300 mb-1"></i>
+          <span class="text-xs font-semibold">Road</span>
+          <span class="text-[10px] text-slate-400">Transit</span>
+        </button>
+      </div>
+
+      <!-- Action Tools (Inspect & Demolish) -->
+      <div class="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-2">
+        <button data-type="inspect" class="tool-btn flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-left text-xs hover:border-indigo-400 transition">
+          <i data-lucide="mouse-pointer" class="w-4 h-4 text-purple-400"></i>
+          <span>Inspect / Rename</span>
+        </button>
+        <button data-type="demolish" class="tool-btn flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-left text-xs hover:border-red-500 text-red-300 transition">
+          <i data-lucide="trash-2" class="w-4 h-4 text-red-400"></i>
+          <span>Demolish (Bulldozer)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Clear City Button -->
+    <div class="mt-4">
+      <button id="clear-all" class="w-full py-2 bg-slate-800 hover:bg-red-950 text-xs text-slate-400 hover:text-red-400 rounded-xl border border-slate-700 hover:border-red-800 transition">
+        Reset Entire Grid
+      </button>
+    </div>
+  </aside>
+
+  <!-- Right Sidebar: Building Inspector & AI City Planner -->
+  <aside class="absolute right-4 top-24 bottom-6 w-80 glass rounded-3xl p-5 flex flex-col justify-between shadow-2xl z-10 pointer-events-auto">
+    <!-- Building Inspector Panel -->
+    <div id="inspector-card" class="hidden flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+          <i data-lucide="info" class="w-4 h-4"></i> Structure Details
+        </span>
+        <button id="close-inspector" class="text-slate-400 hover:text-white text-xs">✕</button>
+      </div>
+      <div>
+        <label class="text-[11px] text-slate-400 font-medium block mb-1">Building Name</label>
+        <div class="flex gap-2">
+          <input type="text" id="edit-name-input" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. Skyline Plaza">
+          <button id="save-name-btn" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-xl text-xs font-semibold">Save</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+        <div>
+          <span class="text-slate-500 block text-[10px]">Type</span>
+          <span id="inspect-type" class="font-bold capitalize text-slate-200">Residential</span>
+        </div>
+        <div>
+          <span class="text-slate-500 block text-[10px]">Grid Coordinates</span>
+          <span id="inspect-coords" class="font-bold text-slate-200">X: 0, Z: 0</span>
+        </div>
+      </div>
+      <div>
+        <label class="text-[11px] text-slate-400 font-medium block mb-1">Height / Floors (<span id="height-val">1</span>x)</label>
+        <input type="range" id="inspect-height" min="1" max="4" step="0.5" value="1" class="w-full accent-indigo-500 cursor-pointer">
+      </div>
+    </div>
+
+    <!-- AI City Planner Assistant -->
+    <div class="flex-1 flex flex-col mt-2 pt-2 border-t border-slate-800 min-h-0">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <div class="p-1.5 rounded-lg bg-gradient-to-tr from-indigo-500 to-pink-500 text-white">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider">AI Urban Architect</h3>
+        </div>
+      </div>
+      
+      <!-- AI Conversation / Advice Box -->
+      <div id="ai-chat" class="flex-1 overflow-y-auto space-y-2 bg-slate-900/50 p-3 rounded-2xl border border-slate-800/80 text-xs mb-3">
+        <div class="bg-indigo-950/40 border border-indigo-800/40 p-2.5 rounded-xl text-slate-300">
+          <p class="font-semibold text-indigo-400 mb-1">Architect AI:</p>
+          "Welcome Mayor! Click anywhere on the 16x16 grid to build. Ask me for urban planning advice or ideas anytime!"
+        </div>
+      </div>
+
+      <!-- AI Prompt Trigger Buttons & Custom Ask -->
+      <div class="flex flex-col gap-2">
+        <div class="grid grid-cols-2 gap-1.5">
+          <button id="btn-ai-analyze" class="bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-900/60 rounded-xl px-2 py-1.5 text-[11px] font-medium transition text-left flex items-center gap-1.5">
+            <i data-lucide="activity" class="w-3.5 h-3.5"></i> Audit City Balance
+          </button>
+          <button id="btn-ai-name" class="bg-slate-800 hover:bg-slate-700 text-pink-300 border border-pink-900/60 rounded-xl px-2 py-1.5 text-[11px] font-medium transition text-left flex items-center gap-1.5">
+            <i data-lucide="tag" class="w-3.5 h-3.5"></i> Name My City
+          </button>
+        </div>
+
+        <form id="ai-custom-form" class="flex gap-2">
+          <input type="text" id="ai-input" placeholder="Ask AI: 'What should I build next?'" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 p-2 rounded-xl text-white transition">
+            <i data-lucide="send" class="w-4 h-4"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="absolute bottom-6 left-1/2 -translate-x-1/2 glass border border-indigo-500/40 px-4 py-2 rounded-2xl text-xs font-semibold text-white pointer-events-none opacity-0 transition-opacity duration-300 z-50"></div>
+
+  <!-- APPLICATION JAVASCRIPT -->
+  <script>
+    lucide.createIcons();
+
+    // -------------------------------------------------------------
+    // 1. THREE.JS SCENE SETUP
+    // -------------------------------------------------------------
+    const GRID_SIZE = 16;
+    const TILE_SIZE = 2;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a); // Slate 900
+    scene.fog = new THREE.FogExp2(0x0f172a, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(24, 28, 32);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2.15; // Don't allow camera under ground
+    controls.minDistance = 8;
+    controls.maxDistance = 70;
+    controls.target.set(0, 0, 0);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 1.2);
+    sunLight.position.set(30, 40, 20);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 100;
+    const d = 25;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    scene.add(sunLight);
+
+    // -------------------------------------------------------------
+    // 2. GRID TERRAIN & CURSOR HIGHLIGHTER
+    // -------------------------------------------------------------
+    const gridGround = new THREE.Group();
+    const planeGeo = new THREE.PlaneGeometry(GRID_SIZE * TILE_SIZE, GRID_SIZE * TILE_SIZE);
+    const planeMat = new THREE.MeshStandardMaterial({ 
+      color: 0x1e293b, 
+      roughness: 0.9, 
+      metalness: 0.1 
+    });
+    const groundMesh = new THREE.Mesh(planeGeo, planeMat);
+    groundMesh.rotation.x = -Math.PI / 2;
+    groundMesh.receiveShadow = true;
+    gridGround.add(groundMesh);
+
+    // Grid lines
+    const gridHelper = new THREE.GridHelper(GRID_SIZE * TILE_SIZE, GRID_SIZE, 0x475569, 0x334155);
+    gridHelper.position.y = 0.01;
+    gridGround.add(gridHelper);
+    scene.add(gridGround);
+
+    // Snapping Cursor Box
+    const cursorGeo = new THREE.BoxGeometry(TILE_SIZE * 0.96, 0.1, TILE_SIZE * 0.96);
+    const cursorMat = new THREE.MeshBasicMaterial({ 
+      color: 0x6366f1, 
+      wireframe: true, 
+      transparent: true, 
+      opacity: 0.8 
+    });
+    const cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
+    cursorMesh.visible = false;
+    scene.add(cursorMesh);
+
+    // -------------------------------------------------------------
+    // 3. GAME STATE & PROCEDURAL BUILDING GENERATORS
+    // -------------------------------------------------------------
+    const buildingsGrid = new Map(); // key: "x,z" -> { mesh, type, name, coords, scaleY }
+    let currentTool = 'house';
+    let selectedBuilding = null;
+    let isDay = true;
+
+    // Helper: Material caching
+    const mats = {
+      houseWall: new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.5 }), // cyan
+      roof: new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4 }), // rose red
+      towerWall: new THREE.MeshStandardMaterial({ color: 0x6366f1, roughness: 0.3, metalness: 0.2 }),
+      towerGlass: new THREE.MeshStandardMaterial({ color: 0xa5f3fc, roughness: 0.1, metalness: 0.8, emissive: 0x0284c7, emissiveIntensity: 0.2 }),
+      shopWall: new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.6 }),
+      awning: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }),
+      trunk: new THREE.MeshStandardMaterial({ color: 0x78350f }),
+      leaves: new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.8 }),
+      water: new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.1, metalness: 0.5 }),
+      factory: new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7 }),
+      chimney: new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.6 }),
+      road: new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 }),
+      roadStripe: new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+    };
+
+    function createBuildingMesh(type) {
+      const group = new THREE.Group();
+      group.castShadow = true;
+      group.receiveShadow = true;
+
+      switch(type) {
+        case 'house': {
+          const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 1.4), mats.houseWall);
+          body.position.y = 0.6;
+          body.castShadow = true;
+          body.receiveShadow = true;
+          
+          const roof = new THREE.Mesh(new THREE.ConeGeometry(1.2, 0.8, 4), mats.roof);
+          roof.position.y = 1.6;
+          roof.rotation.y = Math.PI / 4;
+          roof.castShadow = true;
+
+          group.add(body, roof);
+          break;
+        }
+        case 'apartment': {
+          const tower = new THREE.Mesh(new THREE.BoxGeometry(1.4, 3.2, 1.4), mats.towerWall);
+          tower.position.y = 1.6;
+          tower.castShadow = true;
+          tower.receiveShadow = true;
+
+          // Glowing windows stripes
+          const windowBlock = new THREE.Mesh(new THREE.BoxGeometry(1.45, 2.6, 1.2), mats.towerGlass);
+          windowBlock.position.y = 1.6;
+
+          group.add(tower, windowBlock);
+          break;
+        }
+        case 'shop': {
+          const shopBase = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.0, 1.5), mats.shopWall);
+          shopBase.position.y = 0.5;
+          shopBase.castShadow = true;
+          shopBase.receiveShadow = true;
+
+          const awning = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.2, 0.6), mats.awning);
+          awning.position.set(0, 0.9, 0.6);
+          awning.rotation.x = 0.2;
+
+          group.add(shopBase, awning);
+          break;
+        }
+        case 'park': {
+          // Fountain base + Trees
+          const fountain = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.25, 12), mats.water);
+          fountain.position.y = 0.125;
+          group.add(fountain);
+
+          // 2 small trees
+          const t1Trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6), mats.trunk);
+          t1Trunk.position.set(-0.5, 0.3, -0.4);
+          const t1Leaves = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), mats.leaves);
+          t1Leaves.position.set(-0.5, 0.7, -0.4);
+          t1Leaves.castShadow = true;
+
+          const t2Trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5), mats.trunk);
+          t2Trunk.position.set(0.5, 0.25, 0.4);
+          const t2Leaves = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.7, 6), mats.leaves);
+          t2Leaves.position.set(0.5, 0.65, 0.4);
+          t2Leaves.castShadow = true;
+
+          group.add(t1Trunk, t1Leaves, t2Trunk, t2Leaves);
+          break;
+        }
+        case 'factory': {
+          const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 1.4), mats.factory);
+          base.position.y = 0.55;
+          base.castShadow = true;
+          
+          const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 1.6, 8), mats.chimney);
+          pipe.position.set(0.4, 1.3, 0.3);
+          pipe.castShadow = true;
+
+          group.add(base, pipe);
+          break;
+        }
+        case 'road': {
+          const asphalt = new THREE.Mesh(new THREE.BoxGeometry(TILE_SIZE, 0.05, TILE_SIZE), mats.road);
+          asphalt.position.y = 0.025;
+          asphalt.receiveShadow = true;
+
+          const line = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.06, 1.2), mats.roadStripe);
+          line.position.y = 0.03;
+          group.add(asphalt, line);
+          break;
+        }
+      }
+
+      return group;
+    }
+
+    // Default Name Generator
+    function getDefaultName(type, x, z) {
+      const typeNames = {
+        house: ['Green Villa', 'Sunset Cottage', 'Maple Haven', 'Riverside Home'],
+        apartment: ['Skyline Apex', 'Nova Tower', 'Vertex Suites', 'Aurora Highs'],
+        shop: ['Urban Mart', 'Boutique Express', 'Corner Bakery', 'Tech Hub'],
+        park: ['Central Meadow', 'Whispering Woods', 'Lotus Plaza', 'Zen Oasis'],
+        factory: ['Cybernetics Plant', 'Titan Assembly', 'Forge Works', 'Echo Mill'],
+        road: ['Transit Avenue', 'Metro Lane', 'Crossway St.']
+      };
+      const list = typeNames[type] || ['Structure'];
+      const rand = list[Math.floor(Math.random() * list.length)];
+      return `${rand} (${x},${z})`;
+    }
+
+    // -------------------------------------------------------------
+    // 4. RAYCASTING & INTERACTION
+    // -------------------------------------------------------------
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function getGridCoord(point) {
+      const halfSize = (GRID_SIZE * TILE_SIZE) / 2;
+      const xIndex = Math.floor((point.x + halfSize) / TILE_SIZE);
+      const zIndex = Math.floor((point.z + halfSize) / TILE_SIZE);
+
+      if (xIndex >= 0 && xIndex < GRID_SIZE && zIndex >= 0 && zIndex < GRID_SIZE) {
+        const worldX = (xIndex * TILE_SIZE) - halfSize + (TILE_SIZE / 2);
+        const worldZ = (zIndex * TILE_SIZE) - halfSize + (TILE_SIZE / 2);
+        return { xIndex, zIndex, worldX, worldZ };
+      }
+      return null;
+    }
+
+    function onPointerMove(e) {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(groundMesh);
+
+      if (intersects.length > 0) {
+        const coord = getGridCoord(intersects[0].point);
+        if (coord) {
+          cursorMesh.position.set(coord.worldX, 0.05, coord.worldZ);
+          cursorMesh.visible = true;
+          return;
+        }
+      }
+      cursorMesh.visible = false;
+    }
+
+    let isDragging = false;
+    let downPos = { x: 0, y: 0 };
+    window.addEventListener('pointerdown', (e) => {
+      downPos = { x: e.clientX, y: e.clientY };
+      isDragging = false;
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+      if (dist > 5) return; // Considered drag/rotate, skip build
+
+      // Ignore click if user clicked on UI overlays
+      if (e.target.closest('aside, header, #toast')) return;
+
+      handleGridAction();
+    });
+
+    window.addEventListener('pointermove', onPointerMove);
+
+    function handleGridAction() {
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(groundMesh);
+      if (intersects.length === 0) return;
+
+      const coord = getGridCoord(intersects[0].point);
+      if (!coord) return;
+
+      const key = `${coord.xIndex},${coord.zIndex}`;
+      const existing = buildingsGrid.get(key);
+
+      if (currentTool === 'demolish') {
+        if (existing) {
+          scene.remove(existing.mesh);
+          buildingsGrid.delete(key);
+          showToast(`Demolished ${existing.name}!`);
+          if (selectedBuilding && selectedBuilding.key === key) closeInspector();
+          updateStats();
+        }
+        return;
+      }
+
+      if (currentTool === 'inspect') {
+        if (existing) {
+          openInspector(key, existing);
+        } else {
+          showToast("Empty plot. Select a tool to build here!");
+        }
+        return;
+      }
+
+      // Construction Tool active
+      if (existing) {
+        showToast("Space already occupied! Use Bulldozer to clear.");
+        return;
+      }
+
+      // Build new structure
+      const mesh = createBuildingMesh(currentTool);
+      mesh.position.set(coord.worldX, 0, coord.worldZ);
+      scene.add(mesh);
+
+      // Pop-in bounce animation
+      mesh.scale.set(0.1, 0.1, 0.1);
+      let s = 0.1;
+      const anim = setInterval(() => {
+        s += 0.2;
+        if (s >= 1) {
+          mesh.scale.set(1, 1, 1);
+          clearInterval(anim);
+        } else {
+          mesh.scale.set(s, s, s);
+        }
+      }, 16);
+
+      const buildingData = {
+        key,
+        mesh,
+        type: currentTool,
+        name: getDefaultName(currentTool, coord.xIndex, coord.zIndex),
+        coords: { x: coord.xIndex, z: coord.zIndex },
+        scaleY: 1
+      };
+
+      buildingsGrid.set(key, buildingData);
+      showToast(`Constructed: ${buildingData.name}`);
+      updateStats();
+    }
+
+    // -------------------------------------------------------------
+    // 5. STATS & INSPECTOR LOGIC
+    // -------------------------------------------------------------
+    function updateStats() {
+      let totals = { total: 0, house: 0, apartment: 0, shop: 0, park: 0, factory: 0, road: 0 };
+      buildingsGrid.forEach(b => {
+        totals.total++;
+        if (totals[b.type] !== undefined) totals[b.type]++;
+      });
+
+      document.getElementById('stat-total').innerText = totals.total;
+      document.getElementById('stat-parks').innerText = totals.park;
+      document.getElementById('stat-shops').innerText = totals.shop;
+      document.getElementById('stat-homes').innerText = totals.house + totals.apartment;
+      document.getElementById('stat-factories').innerText = totals.factory;
+    }
+
+    function openInspector(key, bData) {
+      selectedBuilding = bData;
+      const panel = document.getElementById('inspector-card');
+      panel.classList.remove('hidden');
+      panel.classList.add('flex');
+
+      document.getElementById('edit-name-input').value = bData.name;
+      document.getElementById('inspect-type').innerText = bData.type;
+      document.getElementById('inspect-coords').innerText = `X: ${bData.coords.x}, Z: ${bData.coords.z}`;
+      document.getElementById('inspect-height').value = bData.scaleY || 1;
+      document.getElementById('height-val').innerText = bData.scaleY || 1;
+    }
+
+    function closeInspector() {
+      selectedBuilding = null;
+      const panel = document.getElementById('inspector-card');
+      panel.classList.add('hidden');
+      panel.classList.remove('flex');
+    }
+
+    document.getElementById('close-inspector').addEventListener('click', closeInspector);
+
+    document.getElementById('save-name-btn').addEventListener('click', () => {
+      if (selectedBuilding) {
+        const val = document.getElementById('edit-name-input').value.trim();
+        if (val) {
+          selectedBuilding.name = val;
+          showToast(`Renamed to "${val}"`);
+        }
+      }
+    });
+
+    document.getElementById('inspect-height').addEventListener('input', (e) => {
+      if (selectedBuilding) {
+        const val = parseFloat(e.target.value);
+        document.getElementById('height-val').innerText = val;
+        selectedBuilding.scaleY = val;
+        selectedBuilding.mesh.scale.y = val;
+      }
+    });
+
+    // -------------------------------------------------------------
+    // 6. TOOLBAR & DAY/NIGHT SWITCH
+    // -------------------------------------------------------------
+    const toolBtns = document.querySelectorAll('.tool-btn');
+    toolBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        toolBtns.forEach(b => {
+          b.classList.remove('bg-indigo-600/30', 'border-indigo-500');
+          b.classList.add('bg-slate-800/80', 'border-slate-700/80');
+        });
+        btn.classList.add('bg-indigo-600/30', 'border-indigo-500');
+        btn.classList.remove('bg-slate-800/80', 'border-slate-700/80');
+
+        currentTool = btn.getAttribute('data-type');
+        if (currentTool !== 'inspect') closeInspector();
+      });
+    });
+
+    document.getElementById('clear-all').addEventListener('click', () => {
+      if (confirm("Reset the entire city grid?")) {
+        buildingsGrid.forEach(b => scene.remove(b.mesh));
+        buildingsGrid.clear();
+        closeInspector();
+        updateStats();
+        showToast("City grid cleared!");
+      }
+    });
+
+    document.getElementById('toggle-light').addEventListener('click', () => {
+      isDay = !isDay;
+      const icon = document.getElementById('sun-moon-icon');
+      if (isDay) {
+        scene.background.setHex(0x0f172a);
+        scene.fog.color.setHex(0x0f172a);
+        sunLight.intensity = 1.2;
+        ambientLight.intensity = 0.6;
+        icon.setAttribute('data-lucide', 'sun');
+      } else {
+        scene.background.setHex(0x020617);
+        scene.fog.color.setHex(0x020617);
+        sunLight.intensity = 0.2;
+        ambientLight.intensity = 0.3;
+        icon.setAttribute('data-lucide', 'moon');
+      }
+      lucide.createIcons();
+    });
+
+    // Toast Message
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.style.opacity = '1';
+      setTimeout(() => { toast.style.opacity = '0'; }, 2200);
+    }
+
+    // -------------------------------------------------------------
+    // 7. AI URBAN ADVISOR & CHAT
+    // -------------------------------------------------------------
+    function appendAiMsg(sender, text, isAi = true) {
+      const chat = document.getElementById('ai-chat');
+      const div = document.createElement('div');
+      div.className = isAi 
+        ? "bg-indigo-950/40 border border-indigo-800/40 p-2.5 rounded-xl text-slate-300" 
+        : "bg-slate-800 border border-slate-700 p-2 rounded-xl text-slate-200 text-right";
+      
+      div.innerHTML = `<p class="font-semibold text-xs ${isAi ? 'text-indigo-400' : 'text-slate-400'} mb-1">${sender}:</p><p>${text}</p>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // Smart Urban City AI Rule Engine (Works offline or connectable with Gemini)
+    function generateUrbanAdvice(customQuery = '') {
+      let counts = { house: 0, apartment: 0, shop: 0, park: 0, factory: 0, road: 0 };
+      buildingsGrid.forEach(b => { if (counts[b.type] !== undefined) counts[b.type]++; });
+      const residential = counts.house + counts.apartment;
+
+      if (customQuery.toLowerCase().includes('name')) {
+        const names = [
+          "Verdant Heights - The Sustainable Smart Haven",
+          "Neon Bay - The Cyber Commerce Metropolis",
+          "Aurora Valley - The Harmonious Eco-City",
+          "Solaria - The Solar-Powered Innovation Capital"
+        ];
+        return names[Math.floor(Math.random() * names.length)];
+      }
+
+      if (buildingsGrid.size === 0) {
+        return "Your grid is completely empty! Start by laying down an arterial **Road** and building a few **Houses** to invite your first residents.";
+      }
+
+      if (counts.factory > residential) {
+        return `⚠️ Pollution Alert! You have ${counts.factory} factories for only ${residential} residential homes. Citizens need cleaner air! Build at least 2 **Parks** immediately.`;
+      }
+
+      if (residential > 3 && counts.shop === 0) {
+        return `🛒 Economic Alert: Your citizens (${residential} homes) have nowhere to buy groceries! Place down 1 or 2 **Shops** along your road.`;
+      }
+
+      if (counts.park === 0 && residential > 2) {
+        return "🌿 Happiness tip: Your city has zero parks. Adding trees and water fountains increases the eco-score and property value!";
+      }
+
+      if (counts.road === 0 && buildingsGrid.size > 2) {
+        return "🚗 Traffic Warning: You haven't paved any roads! Connect your buildings with transit roads so citizens can commute.";
+      }
+
+      return `Looking great! Current city balance: ${residential} homes, ${counts.shop} shops, ${counts.park} parks, and ${counts.factory} factories. Consider expanding upward with **Towers** for high-density living!`;
+    }
+
+    document.getElementById('btn-ai-analyze').addEventListener('click', () => {
+      appendAiMsg('Mayor', 'Audit City Balance', false);
+      setTimeout(() => {
+        const advice = generateUrbanAdvice();
+        appendAiMsg('Architect AI', advice, true);
+      }, 400);
+    });
+
+    document.getElementById('btn-ai-name').addEventListener('click', () => {
+      appendAiMsg('Mayor', 'Name My City', false);
+      setTimeout(() => {
+        const name = generateUrbanAdvice('name');
+        appendAiMsg('Architect AI', `I suggest naming your settlement: **${name}**!`, true);
+      }, 400);
+    });
+
+    document.getElementById('ai-custom-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('ai-input');
+      const val = input.value.trim();
+      if (!val) return;
+
+      appendAiMsg('Mayor', val, false);
+      input.value = '';
+
+      setTimeout(() => {
+        const reply = generateUrbanAdvice(val);
+        appendAiMsg('Architect AI', reply, true);
+      }, 500);
+    });
+
+    // -------------------------------------------------------------
+    // 8. RENDER LOOP & RESIZE HANDLER
+    // -------------------------------------------------------------
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
